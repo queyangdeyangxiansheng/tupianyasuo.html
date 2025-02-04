@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片批量压缩工具</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pica/9.0.1/pica.min.js"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: #f5f5f5;
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            width: 80%;
+            max-width: 600px;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            padding: 100px;
+            margin: 20px 0;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .upload-area:hover {
+            border-color: #666;
+        }
+        .progress {
+            margin: 20px 0;
+            display: none;
+        }
+        .options {
+            margin: 20px 0;
+        }
+        .file-name {
+            margin: 10px 0;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>图片压缩工具</h1>
+        <div class="upload-area" id="dropZone">
+            点击或拖拽一堆图片到此处
+            <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
+        </div>
+        <div class="file-name" id="fileName"></div>
+        <div class="progress" id="progress">
+            处理进度：<span id="progressText">0%</span>
+        </div>
+        <div class="options">
+            <label><input type="radio" name="format" value="jpg" checked> 压缩为JPG (70%)</label>
+            <label><input type="radio" name="format" value="png"> 压缩为PNG (70%)</label>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const progress = document.getElementById('progress');
+        const progressText = document.getElementById('progressText');
+        const fileNameDisplay = document.getElementById('fileName');
+        const pica = window.pica();
+
+        // 处理拖拽
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#007bff';
+        });
+
+        dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#ccc';
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#ccc';
+            handleFiles(e.dataTransfer.files);
+        });
+
+        dropZone.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        async function processImages() {
+            const files = fileInput.files;
+            if (!files.length) {
+                alert('请先选择图片！');
+                return;
+            }
+
+            const format = document.querySelector('input[name="format"]:checked').value;
+            progress.style.display = 'block';
+            let processed = 0;
+
+            for (let file of files) {
+                try {
+                    const img = await createImageFromFile(file);
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+
+                    await pica.resize(img, canvas, {
+                        quality: 3,
+                        alpha: format === 'png'
+                    });
+
+                    const blob = await new Promise(resolve => {
+                        if (format === 'jpg') {
+                            canvas.toBlob(resolve, 'image/jpeg', 0.7);
+                        } else {
+                            canvas.toBlob(resolve, 'image/png', 0.7);
+                        }
+                    });
+
+                    const fileName = file.name.replace(/\.[^/.]+$/, '') + '_compressed.' + format;
+                    downloadBlob(blob, fileName);
+
+                    processed++;
+                    progressText.textContent = Math.round((processed / files.length) * 100) + '%';
+                } catch (err) {
+                    console.error('处理图片时出错:', err);
+                }
+            }
+
+            setTimeout(() => {
+                progress.style.display = 'none';
+                progressText.textContent = '0%';
+                fileInput.value = '';
+            }, 2000);
+        }
+
+        function createImageFromFile(file) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
+        function downloadBlob(blob, fileName) {
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = fileName;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }
+
+        function handleFiles(files) {
+            fileInput.files = files;
+            const fileNames = Array.from(files).map(file => file.name).join(', ');
+            fileNameDisplay.textContent = '文件: ' + fileNames;
+            processImages();
+        }
+    </script>
+</body>
+</html>
